@@ -20,6 +20,7 @@
     tbody tr:hover{ background:rgba(255,255,255,.02); }
     .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
     .empty{ text-align:center; padding:28px; color:var(--muted); }
+    .hint{ margin-top:10px; font-size:12px; color:#b7c9db }
   </style>
 </head>
 <body>
@@ -40,6 +41,7 @@
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
+      <div id="hint" class="hint"></div>
     </div>
   </div>
 
@@ -48,30 +50,55 @@
 1732055,MATRIZ PREPARACION CAPOT CV080 [O.Z]
 1744635,MATRIZ PREPARACION PORTILLON CR080
 1744638,PINZA ARO PRELIMINAR X52 [EM01]
-1744640,MATRIZ EJEMPLO
+1744640,PINZA ARO LATERALES X
+1744647,SOLDADOR MILLER
 </script>
 
   <script>
     const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
+    // Quita BOM y trim
+    const cleanLine = s => (s||'').replace(/^\uFEFF/, '').trim();
+
+    // Auto-detecta delimitador y salta cabecera robustamente
     function parseCSV(text){
-      const lines = (text||'').trim().split(/\r?\n/);
+      const linesRaw = (text||'').split(/\r?\n/);
+      const lines = linesRaw.map(cleanLine).filter(x => x.length>0);
       if(!lines.length) return [];
-      const header = lines[0] || '';
-      const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
+
+      // Detecta delimitador en la primera línea (sin BOM)
+      const header = cleanLine(lines[0]);
+      const commas = (header.match(/,/g)||[]).length;
+      const semis  = (header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
-      const startIdx = header.toLowerCase().startsWith('equipo'+DELIM) ? 1 : 0;
-      const out=[];
+
+      // ¿La primera línea es cabecera? (contiene 'equipo' y 'denomin' en cualquier orden)
+      const h = header.toLowerCase().replace(/\s+/g,'');
+      const isHeader = h.includes('equipo') && h.includes('denomin');
+
+      const startIdx = isHeader ? 1 : 0;
+      const out = [];
+
       for(let i=startIdx;i<lines.length;i++){
-        const row=[]; let cur='', quoted=false;
-        for(let j=0;j<lines[i].length;j++){
-          const ch=lines[i][j];
-          if(ch === '"'){ if(quoted && lines[i][j+1] === '"'){cur+='"'; j++;} else { quoted = !quoted; } }
-          else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
-          else { cur += ch; }
+        const row = [];
+        let cur = '', quoted = false, line = lines[i];
+        for(let j=0;j<line.length;j++){
+          const ch = line[j];
+          if(ch === '"'){
+            if(quoted && line[j+1] === '"'){ cur += '"'; j++; }
+            else { quoted = !quoted; }
+          } else if(ch === DELIM && !quoted){
+            row.push(cur); cur = '';
+          } else { cur += ch; }
         }
         row.push(cur);
-        if(row.length>=2) out.push({equipo:(row[0]||'').trim(), deno:(row[1]||'').trim()});
+
+        // Asegura al menos dos campos y limpia espacios
+        if(row.length >= 2){
+          const eq = (row[0]||'').trim();
+          const de = (row[1]||'').trim();
+          if(eq || de) out.push({equipo: eq, deno: de});
+        }
       }
       return out;
     }
@@ -86,14 +113,18 @@
         tr.innerHTML=`<td>${r.equipo}</td><td>${r.deno}</td>`;
         tbody.appendChild(tr);
       }
-      document.getElementById('empty').hidden=list.length!==0;
-      document.getElementById('count').textContent=`${list.length} resultado${list.length===1?'':'s'}`;
+      document.getElementById('empty').hidden = list.length !== 0;
+      document.getElementById('count').textContent = `${list.length} resultado${list.length===1?'':'s'}`;
     }
 
     function applyFilter(){
       const q=document.getElementById('q').value;
       const nq=norm(q);
-      render(!nq?DATA:DATA.filter(r=>norm(r.equipo).includes(nq)||norm(r.deno).includes(nq)));
+      const filtered=!nq?DATA:DATA.filter(r=>norm(r.equipo).includes(nq)||norm(r.deno).includes(nq));
+      render(filtered);
+      // pequeña ayuda si no cargó nada:
+      const hint = document.getElementById('hint');
+      hint.textContent = DATA.length===0 ? 'Revisa que data.csv esté en la raíz y que la primera línea sea: Equipo,Denominación (sin ;). Si tu sistema exporta con ;, igual funcionará.' : '';
     }
 
     async function loadData(){
@@ -106,6 +137,10 @@
         const txt=document.getElementById('embeddedCSV').textContent;
         DATA=parseCSV(txt);
       }
+      // precarga filtro si venía en la URL
+      const params=new URL(location.href).searchParams;
+      const urlQ = params.get('q') || '';
+      document.getElementById('q').value = urlQ;
       applyFilter();
     }
 
