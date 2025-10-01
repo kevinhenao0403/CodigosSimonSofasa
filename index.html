@@ -4,151 +4,313 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Listado filtrable — Equipo / Denominación</title>
+  <meta name="description" content="Listado de dos columnas con buscador rápido, pensado para abrir desde código QR en el celular. Sin login, sin apps." />
   <style>
-    :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
-    .wrap{ max-width:900px; margin:24px auto; padding:0 16px 40px; }
-    header{ margin-bottom:16px; }
-    h1{ font-size:20px; margin:0 0 10px; }
-    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; }
-    #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); }
-    .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); border-radius:12px; cursor:pointer; }
-    .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
-    table{ width:100%; border-collapse:collapse; }
-    thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; }
-    tbody td{ padding:12px; border-top:1px solid rgba(255,255,255,.06); }
-    tbody tr:hover{ background:rgba(255,255,255,.02); }
-    .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
-    .empty{ text-align:center; padding:28px; color:var(--muted); }
-    .hint{ margin-top:10px; font-size:12px; color:#b7c9db }
-  </style>
+    :root {
+      --bg: #0b0f14;
+      --card: #11161d;
+      --muted: #8fa3b7;
+      --text: #e8f0f7;
+      --accent: #2dd4bf;
+      --accent-2: #60a5fa;
+      --radius: 16px;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(180deg, var(--bg), #0e141b 40%, #0b1118 100%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 24px auto;
+      padding: 0 16px 40px;
+    }
+    header {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+    .searchbar {
+      display: grid; gap: 8px;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius);
+      padding: 8px;
+      position: sticky; top: 8px; z-index: 5;
+      backdrop-filter: blur(6px);
+    }
+    #q {
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 12px; border: 1px solid rgba(255,255,255,.08);
+      background: #0d131a; color: var(--text);
+      outline: none;
+    }
+    .btn {
+      padding: 10px 12px; border: 1px solid rgba(255,255,255,.08);
+      background: #0d131a; color: var(--text);
+      border-radius: 12px; cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.1); }
+
+    .table-card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; font-weight: 600; color: var(--muted);
+      padding: 12px; background: #0d131a; position: sticky; top: 64px; z-index: 2;
+    }
+    tbody td { padding: 12px; border-top: 1px solid rgba(255,255,255,.06); }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+
+    .meta { display:flex; gap:12px; align-items:center; color: var(--muted); font-size: 12px; margin: 6px 0 14px; }
+    .pill { padding: 4px 8px; border-radius: 999px; background: rgba(45,212,191,.12); border: 1px solid rgba(45,212,191,.35); color: #bff3ea; }
+    .empty { text-align:center; padding: 28px; color: var(--muted); }
+
+    .footer { color: var(--muted); font-size: 12px; margin-top: 14px; text-align:center; }
+
+    @media (max-width: 640px) {
+      thead th { top: 88px; }
+      .searchbar { grid-template-columns: 1fr; position: sticky; top: 0; }
+      .btn { width: 100%; }
+    }
+    .copy-btn{ padding:8px 10px; border:1px solid rgba(255,255,255,.12); background:#0d131a; color:#e8f0f7; border-radius:10px; cursor:pointer; font-size:12px }
+  .copy-btn:hover{ filter:brightness(1.15) }
+  .copy-cell{ cursor:pointer }
+  .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .2s ease }
+  .toast.show{ opacity:1 }
+</style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>Listado filtrable — <span style="color:#2dd4bf">Equipo</span> / <span style="color:#60a5fa">Denominación</span></h1>
-      <div><span id="count" class="pill">—</span></div>
+      <h1>Listado filtrable — <span style="color:var(--accent)">Equipo</span> / <span style="color:var(--accent-2)">Denominación</span></h1>
+      <div class="meta">
+        <span id="count" class="pill">—</span>
+        <span>Busca por cualquier palabra en una o ambas columnas. Acentos y mayúsculas no afectan la búsqueda.</span>
+      </div>
       <div class="searchbar">
         <input id="q" type="search" placeholder="🔎 Buscar por equipo o denominación…" autocomplete="off" />
-        <button class="btn" id="clearBtn">Limpiar</button>
-        <button class="btn" id="shareBtn">Compartir</button>
+        <button class="btn" id="clearBtn" title="Limpiar búsqueda">Limpiar</button>
+        <button class="btn" id="shareBtn" title="Copiar link para compartir">Compartir</button>
       </div>
     </header>
 
     <div class="table-card">
       <table>
-        <thead><tr><th style="width:36%">Equipo</th><th>Denominación</th></tr></thead>
+        <thead>
+          <tr>
+            <th style="width:36%">Equipo</th>
+            <th>Denominación</th>
+            <th style="width:120px">Copiar</th>
+          </tr>
+        </thead>
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
-      <div id="hint" class="hint"></div>
+    </div>
+
+    <div class="footer">
+      <p>Para actualizar la lista, sube un archivo <em>data.csv</em> junto a este HTML (2 columnas: <strong>Equipo,Denominación</strong>). También puedes editar los datos incrustados abajo.</p>
     </div>
   </div>
 
-  <!-- Respaldo por si no carga data.csv -->
+  <!-- 1) Si NO pones un data.csv al lado de este archivo, se usa este CSV incrustado como respaldo.  -->
   <script id="embeddedCSV" type="text/csv">Equipo,Denominación
-1732055,MATRIZ PREPARACION CAPOT CV080 [O.Z]
-1744635,MATRIZ PREPARACION PORTILLON CR080
-1744638,PINZA ARO PRELIMINAR X52 [EM01]
-1744640,PINZA ARO LATERALES X
-1744647,SOLDADOR MILLER
+Compresor A,Compresor de alta presión
+Banda 2,Transportador línea X
+Robot 4,Aplicación sellante puerta delantera
+Prensa 1,Prensa principal 800T
+Soldadora 7,Spot welder columna B
+
 </script>
 
   <script>
-    const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    // Utilidades
+    const norm = s => (s||'')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
 
-    // Quita BOM y trim
-    const cleanLine = s => (s||'').replace(/^\uFEFF/, '').trim();
-
-    // Auto-detecta delimitador y salta cabecera robustamente
     function parseCSV(text){
-      const linesRaw = (text||'').split(/\r?\n/);
-      const lines = linesRaw.map(cleanLine).filter(x => x.length>0);
+      // Auto-detect delimiter (comma or semicolon) and parse respecting quotes
+      const lines = (text||'').trim().split(/
+?
+/);
       if(!lines.length) return [];
-
-      // Detecta delimitador en la primera línea (sin BOM)
-      const header = cleanLine(lines[0]);
+      const header = lines[0] || '';
       const commas = (header.match(/,/g)||[]).length;
       const semis  = (header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
-
-      // ¿La primera línea es cabecera? (contiene 'equipo' y 'denomin' en cualquier orden)
-      const h = header.toLowerCase().replace(/\s+/g,'');
-      const isHeader = h.includes('equipo') && h.includes('denomin');
-
-      const startIdx = isHeader ? 1 : 0;
       const out = [];
-
+      const startIdx = header.toLowerCase().startsWith('equipo'+DELIM) ? 1 : 0;
       for(let i=startIdx;i<lines.length;i++){
         const row = [];
-        let cur = '', quoted = false, line = lines[i];
-        for(let j=0;j<line.length;j++){
-          const ch = line[j];
+        let cur = '', quoted = false;
+        for(let j=0;j<lines[i].length;j++){
+          const ch = lines[i][j];
           if(ch === '"'){
-            if(quoted && line[j+1] === '"'){ cur += '"'; j++; }
+            if(quoted && lines[i][j+1] === '"'){ cur += '"'; j++; }
             else { quoted = !quoted; }
           } else if(ch === DELIM && !quoted){
             row.push(cur); cur = '';
           } else { cur += ch; }
         }
         row.push(cur);
-
-        // Asegura al menos dos campos y limpia espacios
-        if(row.length >= 2){
-          const eq = (row[0]||'').trim();
-          const de = (row[1]||'').trim();
-          if(eq || de) out.push({equipo: eq, deno: de});
-        }
+        if(row.length >= 2){ out.push({ equipo: (row[0]||'').trim(), deno: (row[1]||'').trim() }); }
       }
       return out;
     }
 
-    let DATA=[];
+    // Estado
+    let DATA = [];
 
+    // Render
     function render(list){
-      const tbody=document.getElementById('rows');
-      tbody.innerHTML='';
+      const tbody = document.getElementById('rows');
+      tbody.innerHTML = '';
       for(const r of list){
-        const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${r.equipo}</td><td>${r.deno}</td>`;
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td');
+        const td2 = document.createElement('td');
+        const td3 = document.createElement('td');
+        td1.textContent = r.equipo; td1.className='copy-cell'; td1.title='Toca para copiar';
+        td2.textContent = r.deno;
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copiar equipo';
+        btn.setAttribute('data-equipo', r.equipo);
+        td3.appendChild(btn);
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
         tbody.appendChild(tr);
       }
-      document.getElementById('empty').hidden = list.length !== 0;
+      const empty = document.getElementById('empty');
+      empty.hidden = list.length !== 0;
+      document.getElementById('count').textContent = `${list.length} resultado${list.length===1?'':'s'}`;
+    }
+      const empty = document.getElementById('empty');
+      empty.hidden = list.length !== 0;
       document.getElementById('count').textContent = `${list.length} resultado${list.length===1?'':'s'}`;
     }
 
+    // Búsqueda con debounce + URLSync (?q=)
+    let debTimer = null;
     function applyFilter(){
-      const q=document.getElementById('q').value;
-      const nq=norm(q);
-      const filtered=!nq?DATA:DATA.filter(r=>norm(r.equipo).includes(nq)||norm(r.deno).includes(nq));
+      const q = document.getElementById('q').value;
+      const nq = norm(q);
+      const filtered = !nq ? DATA : DATA.filter(r => {
+        const a = norm(r.equipo), b = norm(r.deno);
+        return a.includes(nq) || b.includes(nq);
+      });
       render(filtered);
-      // pequeña ayuda si no cargó nada:
-      const hint = document.getElementById('hint');
-      hint.textContent = DATA.length===0 ? 'Revisa que data.csv esté en la raíz y que la primera línea sea: Equipo,Denominación (sin ;). Si tu sistema exporta con ;, igual funcionará.' : '';
     }
 
+    function syncQueryParam(){
+      const val = document.getElementById('q').value;
+      const url = new URL(location.href);
+      if(val) url.searchParams.set('q', val); else url.searchParams.delete('q');
+      history.replaceState(null, '', url);
+    }
+
+    function onInput(){
+      clearTimeout(debTimer);
+      debTimer = setTimeout(() => { applyFilter(); syncQueryParam(); }, 120);
+    }
+
+    // Carga CSV: intenta data.csv, si falla usa embebido
     async function loadData(){
-      try{
-        const res=await fetch('data.csv?cb='+Date.now(), {cache:'no-store'});
-        if(!res.ok) throw 0;
-        const txt=await res.text();
-        DATA=parseCSV(txt);
-      }catch(e){
-        const txt=document.getElementById('embeddedCSV').textContent;
-        DATA=parseCSV(txt);
+      try {
+        const res = await fetch('data.csv?cb=' + Date.now(), { cache: 'no-store' });
+        if(!res.ok) throw new Error('no csv');
+        const txt = await res.text();
+        DATA = parseCSV(txt);
+      } catch (e) {
+        const txt = document.getElementById('embeddedCSV').textContent;
+        DATA = parseCSV(txt);
       }
-      // precarga filtro si venía en la URL
-      const params=new URL(location.href).searchParams;
-      const urlQ = params.get('q') || '';
-      document.getElementById('q').value = urlQ;
+      // Inicializa
+      const urlQ = new URL(location.href).searchParams.get('q') || '';
+      const qEl = document.getElementById('q');
+      qEl.value = urlQ;
       applyFilter();
     }
 
-    document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
-    document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('q').value='';applyFilter();});
-    document.getElementById('shareBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);alert('Link copiado');}catch{alert('Copia desde la barra del navegador');}});
+    // Botones
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('q').value = '';
+      applyFilter();
+      syncQueryParam();
+      document.getElementById('q').focus();
+    });
+
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        const prev = document.getElementById('shareBtn').textContent;
+        document.getElementById('shareBtn').textContent = '¡Link copiado!';
+        setTimeout(()=>document.getElementById('shareBtn').textContent = prev, 1200);
+      } catch {
+        alert('Copia el link desde la barra del navegador.');
+      }
+    });
+
+    document.getElementById('q').addEventListener('input', onInput);
+
+    // Copiar al portapapeles (botón y toque en la celda de Equipo)
+    const showToast = (msg)=>{
+      let t = document.getElementById('toast');
+      if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(window._toastT);
+      window._toastT = setTimeout(()=>t.classList.remove('show'), 1200);
+    };
+
+    document.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.copy-btn');
+      if(btn){
+        const val = btn.getAttribute('data-equipo')||'';
+        navigator.clipboard.writeText(val).then(()=>showToast('Equipo copiado')).catch(()=>showToast('No se pudo copiar'));
+      }
+      const cell = e.target.closest('.copy-cell');
+      if(cell){
+        const val = cell.textContent.trim();
+        navigator.clipboard.writeText(val).then(()=>showToast('Equipo copiado')).catch(()=>showToast('No se pudo copiar'));
+      }
+    });
+
+    // Go!
     loadData();
   </script>
+
+  <!--
+  =============================
+  Cómo publicarlo gratis y usar QR
+  =============================
+  1) Sube este archivo (index.html) y opcionalmente un data.csv a un repositorio en GitHub.
+     - Activa GitHub Pages (Settings → Pages → Deploy from branch → carpeta raíz). Te dará una URL pública.
+  2) Si prefieres, súbelo a Netlify, Vercel o Cloudflare Pages (arrastrar y soltar la carpeta). Obtendrás una URL pública.
+  3) Crea un código QR con la URL pública (cualquier generador de QR funciona). Imprime/pega el QR.
+  4) Para actualizar la lista solo reemplaza el data.csv (formato: "Equipo,Denominación" sin tildes obligatorias).
+
+  Formato data.csv (ejemplo):
+  Equipo,Denominación
+  Compresor A,Compresor de alta presión
+  Banda 2,Transportador línea X
+  ...
+
+  Listo. Los usuarios abren el QR, buscan por texto y encuentran su equipo / denominación desde el celular, sin app ni login.
+  -->
 </body>
 </html>
-
