@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEBUG CodigosSimonSofasa</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;padding:16px;background:#0b0f14;color:#e8f0f7}
+  pre{white-space:pre-wrap;background:#11161d;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.1)}
+  code{color:#bfe3ff}
+  .ok{color:#2dd4bf}.bad{color:#f87171}
+</style>
+</head>
+<body>
+<h1>🔍 Diagnóstico</h1>
+<ol>
+  <li>Este HTML se llama <b>index_debug.html</b>. Accede a él así:<br>
+  <code>https://TUUSUARIO.github.io/TUREPO/index_debug.html?cb=1</code></li>
+  <li>Debajo verás <b>qué CSV se leyó</b>, el <b>delimitador detectado</b> y <b>primeras líneas</b>.</li>
+</ol>
+
+<h2>Estado</h2>
+<div id="status">Cargando…</div>
+
+<h2>CSV (primeras 3 líneas crudas)</h2>
+<pre id="raw">(aún no)</pre>
+
+<h2>Delimitador detectado</h2>
+<div id="delim">?</div>
+
+<h2>Primeras 5 filas parseadas</h2>
+<pre id="rows">(aún no)</pre>
+
+<script>
+async function get(url){
+  const res = await fetch(url + (url.includes("?")?"&":"?")+"cb="+Date.now(), {cache:"no-store"});
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return await res.text();
+}
+
+function detectDelim(line){
+  const c = (line.match(/,/g)||[]).length;
+  const s = (line.match(/;/g)||[]).length;
+  return s>c?";":",";
+}
+
+// parser mínimo con comillas
+function parseCSV(text, DELIM){
+  const lines = (text||"").trim().split(/\r?\n/);
+  const out = [];
+  const header = (lines[0]||"").toLowerCase();
+  const startIdx = header.startsWith("equipo"+DELIM) ? 1 : 0;
+  for(let i=startIdx;i<lines.length;i++){
+    const row=[]; let cur="", quoted=false;
+    for(let j=0;j<lines[i].length;j++){
+      const ch=lines[i][j];
+      if(ch === '"'){ if(quoted && lines[i][j+1]==='"'){cur+='"'; j++;} else {quoted=!quoted;} }
+      else if(ch === DELIM && !quoted){ row.push(cur); cur=""; }
+      else cur += ch;
+    }
+    row.push(cur);
+    if(row.length>=2) out.push({equipo:(row[0]||"").trim(), deno:(row[1]||"").trim()});
+    if(out.length>=5) break;
+  }
+  return out;
+}
+
+(async () => {
+  const status = document.getElementById("status");
+  const raw = document.getElementById("raw");
+  const delim = document.getElementById("delim");
+  const rows = document.getElementById("rows");
+  try{
+    const txt = await get("data.csv"); // intenta data.csv
+    const firstLine = (txt.split(/\r?\n/)[0]||"");
+    const d = detectDelim(firstLine);
+    status.innerHTML = 'OK: <span class="ok">data.csv cargado</span>';
+    raw.textContent = txt.split(/\r?\n/).slice(0,3).join("\n");
+    delim.textContent = d;
+    rows.textContent = JSON.stringify(parseCSV(txt, d), null, 2);
+  }catch(e){
+    status.innerHTML = 'FALLÓ leer data.csv → usando incrustado: <span class="bad">'+e.message+'</span>';
+    const fallback = `Equipo,Denominación
+1732055,MATRIZ PREPARACION CAPOT CV080 [O.Z]
+1744635,MATRIZ PREPARACION PORTILLON CR080
+1744638,PINZA ARO PRELIMINAR X52 [EM01]`;
+    raw.textContent = fallback;
+    delim.textContent = detectDelim(fallback.split(/\r?\n/)[0]);
+    rows.textContent = JSON.stringify(parseCSV(fallback, ","), null, 2);
+  }
+})();
+</script>
+</body>
+</html>
