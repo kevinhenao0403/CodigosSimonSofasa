@@ -3,19 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Listado — v5-mobile (GMAO)</title>
-  <!-- BUILD v5-mobile-GMAO -->
+  <title>Listado de equipos Soldadura</title>
+  <!-- BUILD v6-mobile-GMAO -->
   <style>
     :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
     .wrap{ max-width:1100px; margin:24px auto; padding:0 16px 40px; }
     header{ margin-bottom:16px; }
     h1{ font-size:20px; margin:0 0 10px; }
-    .meta{ color:var(--muted); font-size:12px; margin:6px 0 12px; }
+    .meta{ color:var(--muted); font-size:12px; margin:6px 0 12px; display:flex; gap:8px; align-items:center; }
     .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
-    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; }
+    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; }
     #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; }
-    .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; border-radius:12px; cursor:pointer; }
     .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
     table{ width:100%; border-collapse:collapse; }
     thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; z-index:4; }
@@ -29,7 +28,6 @@
 
     /* ===== Vista móvil: filas como tarjetas ===== */
     @media (max-width: 720px){
-      .searchbar{ grid-template-columns:1fr; top:0; }
       thead{ display:none; }
       table, tbody, tr, td{ display:block; width:100%; }
       tbody tr{ border-top:1px solid rgba(255,255,255,.06); padding:6px 12px; }
@@ -46,15 +44,13 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Listado de equipos del taller de Soldadura</h1>
+      <h1>Listado de equipos Soldadura</h1>
       <div class="meta">
         <span id="count" class="pill">—</span>
-        <span id="msg" style="margin-left:8px"></span>
+        <span id="msg"></span>
       </div>
       <div class="searchbar">
         <input id="q" type="search" placeholder="🔎 Buscar por equipo, denominación o GMAO…" autocomplete="off" />
-        <button class="btn" id="clearBtn">Limpiar</button>
-        <button class="btn" id="shareBtn">Compartir</button>
       </div>
     </header>
 
@@ -74,8 +70,15 @@ EJ-002,Otro ejemplo,456
 </script>
 
   <script>
-    const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const clean = s => (s||'').replace(/^\uFEFF/, '').trim();
+    // Normaliza texto: quita acentos, minúsculas, compacta espacios y recorta
+    const norm = s => (s ?? '')
+      .toString()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const clean = s => (s||'').replace(/^\uFEFF/, '').trim(); // quita BOM
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -147,11 +150,15 @@ EJ-002,Otro ejemplo,456
     }
 
     function applyFilter(){
-      const q=document.getElementById('q').value;
-      const nq=norm(q);
-      const filtered=!nq ? DATA : DATA.filter(r =>
-        norm(r.equipo).includes(nq) || norm(r.deno).includes(nq) || norm(r.gmao).includes(nq)
-      );
+      const q = document.getElementById('q').value;
+      const nq = norm(q);
+      if (!nq){ render(DATA); return; }
+      // Busca por palabras (todas deben estar presentes en alguna columna)
+      const tokens = nq.split(' ');
+      const filtered = DATA.filter(r => {
+        const hay = norm(`${r.equipo} ${r.deno} ${r.gmao||''}`);
+        return tokens.every(t => hay.includes(t));
+      });
       render(filtered);
     }
 
@@ -165,7 +172,7 @@ EJ-002,Otro ejemplo,456
         if(!Array.isArray(DATA) || DATA.length===0){
           const fb=document.getElementById('embeddedCSV').textContent;
           const p=parseCSV(fb);
-          if(p.length>0){ DATA=p; msg.textContent='Usando datos de respaldo (CSV vacío o con encabezado distinto).'; }
+          if(p.length>0){ DATA=p; msg.textContent='Usando datos de respaldo.'; }
         }else{
           msg.textContent='Datos cargados desde data.csv';
         }
@@ -179,12 +186,11 @@ EJ-002,Otro ejemplo,456
       applyFilter();
     }
 
+    // Eventos
     document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
-    document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('q').value='';applyFilter();});
-    document.getElementById('shareBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);toast('Link copiado');}catch{toast('Copia desde la barra del navegador');}});
+    document.getElementById('q').addEventListener('blur',(e)=>{ e.target.value = norm(e.target.value); });
 
     loadData();
   </script>
 </body>
 </html>
-
