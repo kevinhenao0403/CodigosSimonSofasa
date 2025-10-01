@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Listado — v4 (3 columnas)</title>
-  <!-- BUILD v4-3cols-GMAO -->
+  <title>Listado — v5-mobile (GMAO)</title>
+  <!-- BUILD v5-mobile-GMAO -->
   <style>
     :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
     .wrap{ max-width:1100px; margin:24px auto; padding:0 16px 40px; }
     header{ margin-bottom:16px; }
     h1{ font-size:20px; margin:0 0 10px; }
-    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; }
-    #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); }
+    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; }
+    #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; }
     .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; border-radius:12px; cursor:pointer; }
     .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
     table{ width:100%; border-collapse:collapse; }
-    thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; }
+    thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; z-index:4; }
     tbody td{ padding:12px; border-top:1px solid rgba(255,255,255,.06); }
     tbody tr:hover{ background:rgba(255,255,255,.02); }
     .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
@@ -25,7 +25,24 @@
     .copy-btn:hover{ filter:brightness(1.12) }
     .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s ease }
     .toast.show{ opacity:1 }
-    @media (max-width:720px){ .searchbar{ grid-template-columns:1fr; } }
+
+    /* ===== Vista móvil: convierte filas en tarjetas y muestra etiquetas ===== */
+    @media (max-width: 720px){
+      .searchbar{ grid-template-columns:1fr; top:0; }
+      thead{ display:none; }
+      table, tbody, tr, td{ display:block; width:100%; }
+      tbody tr{ border-top:1px solid rgba(255,255,255,.06); padding:6px 12px; }
+      tbody td{ border:0; padding:8px 0; }
+      tbody td::before{
+        content: attr(data-label);
+        display:block;
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:4px;
+      }
+      /* Botón copiar ocupa todo el ancho en móvil */
+      td[data-label="Acción"] .copy-btn{ width:100%; }
+    }
   </style>
 </head>
 <body>
@@ -56,8 +73,8 @@ EJ-002,Otro ejemplo,456
 </script>
 
   <script>
-    const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const clean = s => (s||'').replace(/^\uFEFF/, '').trim();
+    const norm = s => (s||'').toString().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
+    const clean = s => (s||'').replace(/^\\uFEFF/, '').trim();
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -65,7 +82,6 @@ EJ-002,Otro ejemplo,456
       t.textContent=msg; t.classList.add('show');
       clearTimeout(window._t); window._t=setTimeout(()=>t.classList.remove('show'), 1200);
     }
-
     async function copyText(val){
       try { await navigator.clipboard.writeText(val); toast('Equipo copiado'); }
       catch(e){
@@ -77,13 +93,13 @@ EJ-002,Otro ejemplo,456
     }
 
     function parseCSV(text){
-      const lines = (text||'').split(/\r?\n/).map(clean).filter(x=>x.length>0);
+      const lines = (text||'').split(/\\r?\\n/).map(clean).filter(x=>x.length>0);
       if(!lines.length) return [];
       const header = clean(lines[0]);
       const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
-      const h = header.toLowerCase().replace(/\s+/g,'');
-      const isHeader = h.includes('equipo') && h.includes('denomin') && (h.includes('gmao'));
+      const h = header.toLowerCase().replace(/\\s+/g,'');
+      const isHeader = h.includes('equipo') && h.includes('denomin') && h.includes('gmao');
       const startIdx = isHeader ? 1 : 0;
 
       const out=[];
@@ -92,7 +108,7 @@ EJ-002,Otro ejemplo,456
         const row=[]; let cur='', quoted=false;
         for(let j=0;j<line.length;j++){
           const ch=line[j];
-          if(ch === '"'){ if(quoted && line[j+1] === '"'){ cur+='"'; j++; } else { quoted=!quoted; } }
+          if(ch === '\"'){ if(quoted && line[j+1] === '\"'){ cur+='\"'; j++; } else { quoted=!quoted; } }
           else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
           else { cur += ch; }
         }
@@ -112,13 +128,16 @@ EJ-002,Otro ejemplo,456
       tbody.innerHTML='';
       for(const r of list){
         const tr=document.createElement('tr');
-        const td1=document.createElement('td'); td1.textContent=r.equipo;
-        const td2=document.createElement('td'); td2.textContent=r.deno;
-        const td3=document.createElement('td'); td3.textContent=r.gmao;
-        const td4=document.createElement('td');
+
+        const td1=document.createElement('td'); td1.textContent=r.equipo; td1.setAttribute('data-label','Equipo');
+        const td2=document.createElement('td'); td2.textContent=r.deno;   td2.setAttribute('data-label','Denominación');
+        const td3=document.createElement('td'); td3.textContent=r.gmao;   td3.setAttribute('data-label','GMAO');
+
+        const td4=document.createElement('td'); td4.setAttribute('data-label','Acción');
         const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copiar equipo';
         btn.addEventListener('click', ()=> copyText(r.equipo));
         td4.appendChild(btn);
+
         tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
         tbody.appendChild(tr);
       }
@@ -163,3 +182,4 @@ EJ-002,Otro ejemplo,456
   </script>
 </body>
 </html>
+
