@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Listado filtrable — Equipo / Denominación</title>
-  <!-- BUILD copy-v3 -->
+  <title>Listado — v4 (3 columnas)</title>
+  <!-- BUILD v4-3cols-GMAO -->
   <style>
     :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
-    .wrap{ max-width:900px; margin:24px auto; padding:0 16px 40px; }
+    .wrap{ max-width:1100px; margin:24px auto; padding:0 16px 40px; }
     header{ margin-bottom:16px; }
     h1{ font-size:20px; margin:0 0 10px; }
     .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; }
     #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); }
-    .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); border-radius:12px; cursor:pointer; }
+    .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; border-radius:12px; cursor:pointer; }
     .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
     table{ width:100%; border-collapse:collapse; }
     thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; }
@@ -21,21 +21,20 @@
     tbody tr:hover{ background:rgba(255,255,255,.02); }
     .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
     .empty{ text-align:center; padding:28px; color:var(--muted); }
-    /* Copiar */
     .copy-btn{ padding:8px 10px; border:1px solid rgba(255,255,255,.12); background:#0d131a; color:#e8f0f7; border-radius:10px; cursor:pointer; font-size:12px }
     .copy-btn:hover{ filter:brightness(1.12) }
     .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s ease }
     .toast.show{ opacity:1 }
-    @media (max-width:640px){ .searchbar{ grid-template-columns:1fr; } }
+    @media (max-width:720px){ .searchbar{ grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>Listado filtrable — <span style="color:#2dd4bf">Equipo</span> / <span style="color:#60a5fa">Denominación</span></h1>
+      <h1>Listado filtrable — <span style="color:#2dd4bf">Equipo</span> / <span style="color:#60a5fa">Denominación</span> / <span style="color:#a78bfa">GMAO</span></h1>
       <div><span id="count" class="pill">—</span></div>
       <div class="searchbar">
-        <input id="q" type="search" placeholder="🔎 Buscar por equipo o denominación…" autocomplete="off" />
+        <input id="q" type="search" placeholder="🔎 Buscar por equipo, denominación o GMAO…" autocomplete="off" />
         <button class="btn" id="clearBtn">Limpiar</button>
         <button class="btn" id="shareBtn">Compartir</button>
       </div>
@@ -43,26 +42,22 @@
 
     <div class="table-card">
       <table>
-        <thead><tr><th style="width:36%">Equipo</th><th>Denominación</th><th style="width:120px">Copiar</th></tr></thead>
+        <thead><tr><th style="width:18%">Equipo</th><th>Denominación</th><th style="width:22%">GMAO</th><th style="width:120px">Copiar</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
     </div>
   </div>
 
-  <!-- Respaldo por si no carga data.csv -->
-  <script id="embeddedCSV" type="text/csv">Equipo,Denominación
-1732055,MATRIZ PREPARACION CAPOT CV080 [O.Z]
-1744635,MATRIZ PREPARACION PORTILLON CR080
-1744638,PINZA ARO PRELIMINAR X52 [EM01]
-1744640,PINZA ARO LATERALES X
-1744647,SOLDADOR MILLER
+  <!-- Respaldo mínimo -->
+  <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO
+EJ-001,Ejemplo equipo,123
+EJ-002,Otro ejemplo,456
 </script>
 
   <script>
-    // ===== Utilidades =====
     const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const clean = s => (s||'').replace(/^\uFEFF/, '').trim(); // quita BOM
+    const clean = s => (s||'').replace(/^\uFEFF/, '').trim();
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -74,7 +69,6 @@
     async function copyText(val){
       try { await navigator.clipboard.writeText(val); toast('Equipo copiado'); }
       catch(e){
-        // Fallback amplio
         const ta=document.createElement('textarea'); ta.value=val; ta.style.position='fixed'; ta.style.opacity='0';
         document.body.appendChild(ta); ta.focus(); ta.select();
         try{ document.execCommand('copy'); toast('Equipo copiado'); }catch(_){ toast('No se pudo copiar'); }
@@ -82,7 +76,6 @@
       }
     }
 
-    // ===== Parser robusto (; o ,) y cabeceras “raras” =====
     function parseCSV(text){
       const lines = (text||'').split(/\r?\n/).map(clean).filter(x=>x.length>0);
       if(!lines.length) return [];
@@ -90,7 +83,7 @@
       const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
       const h = header.toLowerCase().replace(/\s+/g,'');
-      const isHeader = h.includes('equipo') && h.includes('denomin');
+      const isHeader = h.includes('equipo') && h.includes('denomin') && (h.includes('gmao'));
       const startIdx = isHeader ? 1 : 0;
 
       const out=[];
@@ -104,15 +97,14 @@
           else { cur += ch; }
         }
         row.push(cur);
-        if(row.length>=2){
-          const eq=(row[0]||'').trim(), de=(row[1]||'').trim();
-          if(eq || de) out.push({equipo:eq, deno:de});
+        if(row.length>=3){
+          const eq=(row[0]||'').trim(), de=(row[1]||'').trim(), gm=(row[2]||'').trim();
+          if(eq || de || gm) out.push({equipo:eq, deno:de, gmao:gm});
         }
       }
       return out;
     }
 
-    // ===== Estado + render =====
     let DATA=[];
 
     function render(list){
@@ -120,19 +112,14 @@
       tbody.innerHTML='';
       for(const r of list){
         const tr=document.createElement('tr');
-
         const td1=document.createElement('td'); td1.textContent=r.equipo;
-
         const td2=document.createElement('td'); td2.textContent=r.deno;
-
-        const td3=document.createElement('td');
-        const btn=document.createElement('button');
-        btn.className='copy-btn';
-        btn.textContent='Copiar equipo';
+        const td3=document.createElement('td'); td3.textContent=r.gmao;
+        const td4=document.createElement('td');
+        const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copiar equipo';
         btn.addEventListener('click', ()=> copyText(r.equipo));
-        td3.appendChild(btn);
-
-        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+        td4.appendChild(btn);
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
         tbody.appendChild(tr);
       }
       document.getElementById('empty').hidden = list.length !== 0;
@@ -142,11 +129,12 @@
     function applyFilter(){
       const q=document.getElementById('q').value;
       const nq=norm(q);
-      const filtered=!nq ? DATA : DATA.filter(r => norm(r.equipo).includes(nq) || norm(r.deno).includes(nq));
+      const filtered=!nq ? DATA : DATA.filter(r =>
+        norm(r.equipo).includes(nq) || norm(r.deno).includes(nq) || norm(r.gmao).includes(nq)
+      );
       render(filtered);
     }
 
-    // ===== Carga con anti-caché y fallback si 0 filas =====
     async function loadData(){
       try{
         const res=await fetch('data.csv?cb='+Date.now(), {cache:'no-store'});
@@ -162,13 +150,11 @@
         const fb=document.getElementById('embeddedCSV').textContent;
         DATA=parseCSV(fb);
       }
-      // precargar filtro desde URL
       const urlQ=new URL(location.href).searchParams.get('q')||'';
       document.getElementById('q').value=urlQ;
       applyFilter();
     }
 
-    // ===== Eventos =====
     document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
     document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('q').value='';applyFilter();});
     document.getElementById('shareBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);toast('Link copiado');}catch{toast('Copia desde la barra del navegador');}});
