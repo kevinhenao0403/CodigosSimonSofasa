@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Listado filtrable — Equipo / Denominación</title>
+  <meta name="description" content="Listado de dos columnas con buscador rápido, pensado para abrir desde código QR en el celular. Sin login, sin apps." />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0b0f14;
+      color: #e8f0f7;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 { font-size: 20px; margin-bottom: 10px; }
+    .searchbar {
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 10px;
+      width: 100%;
+      border-radius: 8px;
+      border: none;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.2);
+      text-align: left;
+    }
+    tr:hover {
+      background: rgba(255,255,255,.05);
+    }
+    .empty {
+      padding: 20px;
+      text-align: center;
+      color: #8fa3b7;
+    }
+  </style>
+</head>
+<body>
+  <h1>Listado filtrable — Equipo / Denominación</h1>
+  <div class="searchbar">
+    <input id="q" type="search" placeholder="🔎 Buscar por equipo o denominación…" />
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Equipo</th>
+        <th>Denominación</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
+
+  <script>
+    const norm = s => (s||'').toString()
+      .normalize('NFD')
+      .replace(/[\\u0300-\\u036f]/g, '')
+      .toLowerCase();
+
+    function parseCSV(text){
+      const lines = text.trim().split(/\\r?\\n/);
+      const out = [];
+      const startIdx = lines[0].toLowerCase().startsWith('equipo,') ? 1 : 0;
+      for(let i=startIdx;i<lines.length;i++){
+        const [equipo, deno] = lines[i].split(',');
+        if(equipo || deno) out.push({equipo:equipo||'', deno:deno||''});
+      }
+      return out;
+    }
+
+    function render(list){
+      const tbody = document.getElementById('rows');
+      tbody.innerHTML = '';
+      for(const r of list){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.equipo}</td><td>${r.deno}</td>`;
+        tbody.appendChild(tr);
+      }
+      document.getElementById('empty').hidden = list.length !== 0;
+    }
+
+    function applyFilter(){
+      const q = document.getElementById('q').value;
+      const nq = norm(q);
+      const filtered = !nq ? DATA : DATA.filter(r =>
+        norm(r.equipo).includes(nq) || norm(r.deno).includes(nq)
+      );
+      render(filtered);
+    }
+
+    document.getElementById('q').addEventListener('input', applyFilter);
+
+    let DATA = [];
+    async function loadData(){
+      try {
+        const res = await fetch('data.csv');
+        const txt = await res.text();
+        DATA = parseCSV(txt);
+      } catch {
+        DATA = [];
+      }
+      applyFilter();
+    }
+    loadData();
+  </script>
+</body>
+</html>
