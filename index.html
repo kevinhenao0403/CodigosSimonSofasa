@@ -48,8 +48,7 @@
 1732055,MATRIZ PREPARACION CAPOT CV080 [O.Z]
 1744635,MATRIZ PREPARACION PORTILLON CR080
 1744638,PINZA ARO PRELIMINAR X52 [EM01]
-1744640,PINZA ARO LATERALES X
-1744647,SOLDADOR MILLER
+1744640,MATRIZ EJEMPLO
 </script>
 
   <script>
@@ -58,7 +57,7 @@
     function parseCSV(text){
       const lines = (text||'').trim().split(/\r?\n/);
       if(!lines.length) return [];
-      const header = lines[0];
+      const header = lines[0] || '';
       const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
       const startIdx = header.toLowerCase().startsWith('equipo'+DELIM) ? 1 : 0;
@@ -67,17 +66,18 @@
         const row=[]; let cur='', quoted=false;
         for(let j=0;j<lines[i].length;j++){
           const ch=lines[i][j];
-          if(ch=='"'){ if(quoted&&lines[i][j+1]=='"'){cur+='"'; j++;} else {quoted=!quoted;} }
-          else if(ch===DELIM && !quoted){ row.push(cur); cur=''; }
-          else cur+=ch;
+          if(ch === '"'){ if(quoted && lines[i][j+1] === '"'){cur+='"'; j++;} else { quoted = !quoted; } }
+          else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
+          else { cur += ch; }
         }
         row.push(cur);
-        if(row.length>=2) out.push({equipo:row[0].trim(), deno:row[1].trim()});
+        if(row.length>=2) out.push({equipo:(row[0]||'').trim(), deno:(row[1]||'').trim()});
       }
       return out;
     }
 
     let DATA=[];
+
     function render(list){
       const tbody=document.getElementById('rows');
       tbody.innerHTML='';
@@ -93,8 +93,7 @@
     function applyFilter(){
       const q=document.getElementById('q').value;
       const nq=norm(q);
-      const filtered=!nq?DATA:DATA.filter(r=>norm(r.equipo).includes(nq)||norm(r.deno).includes(nq));
-      render(filtered);
+      render(!nq?DATA:DATA.filter(r=>norm(r.equipo).includes(nq)||norm(r.deno).includes(nq)));
     }
 
     async function loadData(){
@@ -110,9 +109,9 @@
       applyFilter();
     }
 
-    document.getElementById('q').addEventListener('input', ()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
+    document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
     document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('q').value='';applyFilter();});
-    document.getElementById('shareBtn').addEventListener('click', async()=>{try{await navigator.clipboard.writeText(location.href);alert('Link copiado');}catch{alert('Copia desde la barra del navegador');}});
+    document.getElementById('shareBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);alert('Link copiado');}catch{alert('Copia desde la barra del navegador');}});
     loadData();
   </script>
 </body>
