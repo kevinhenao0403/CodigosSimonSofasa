@@ -11,6 +11,8 @@
     .wrap{ max-width:1100px; margin:24px auto; padding:0 16px 40px; }
     header{ margin-bottom:16px; }
     h1{ font-size:20px; margin:0 0 10px; }
+    .meta{ color:var(--muted); font-size:12px; margin:6px 0 12px; }
+    .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
     .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; }
     #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; }
     .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; border-radius:12px; cursor:pointer; }
@@ -19,14 +21,13 @@
     thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; z-index:4; }
     tbody td{ padding:12px; border-top:1px solid rgba(255,255,255,.06); }
     tbody tr:hover{ background:rgba(255,255,255,.02); }
-    .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
     .empty{ text-align:center; padding:28px; color:var(--muted); }
     .copy-btn{ padding:8px 10px; border:1px solid rgba(255,255,255,.12); background:#0d131a; color:#e8f0f7; border-radius:10px; cursor:pointer; font-size:12px }
     .copy-btn:hover{ filter:brightness(1.12) }
     .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s ease }
     .toast.show{ opacity:1 }
 
-    /* ===== Vista móvil: convierte filas en tarjetas y muestra etiquetas ===== */
+    /* ===== Vista móvil: filas como tarjetas ===== */
     @media (max-width: 720px){
       .searchbar{ grid-template-columns:1fr; top:0; }
       thead{ display:none; }
@@ -36,11 +37,8 @@
       tbody td::before{
         content: attr(data-label);
         display:block;
-        font-size:12px;
-        color:var(--muted);
-        margin-bottom:4px;
+        font-size:12px; color:var(--muted); margin-bottom:4px;
       }
-      /* Botón copiar ocupa todo el ancho en móvil */
       td[data-label="Acción"] .copy-btn{ width:100%; }
     }
   </style>
@@ -49,7 +47,10 @@
   <div class="wrap">
     <header>
       <h1>Listado filtrable — <span style="color:#2dd4bf">Equipo</span> / <span style="color:#60a5fa">Denominación</span> / <span style="color:#a78bfa">GMAO</span></h1>
-      <div><span id="count" class="pill">—</span></div>
+      <div class="meta">
+        <span id="count" class="pill">—</span>
+        <span id="msg" style="margin-left:8px"></span>
+      </div>
       <div class="searchbar">
         <input id="q" type="search" placeholder="🔎 Buscar por equipo, denominación o GMAO…" autocomplete="off" />
         <button class="btn" id="clearBtn">Limpiar</button>
@@ -66,15 +67,15 @@
     </div>
   </div>
 
-  <!-- Respaldo mínimo -->
+  <!-- Respaldo mínimo: si el CSV falla nunca verás la tabla vacía -->
   <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO
 EJ-001,Ejemplo equipo,123
 EJ-002,Otro ejemplo,456
 </script>
 
   <script>
-    const norm = s => (s||'').toString().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
-    const clean = s => (s||'').replace(/^\\uFEFF/, '').trim();
+    const norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const clean = s => (s||'').replace(/^\uFEFF/, '').trim();
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -93,12 +94,12 @@ EJ-002,Otro ejemplo,456
     }
 
     function parseCSV(text){
-      const lines = (text||'').split(/\\r?\\n/).map(clean).filter(x=>x.length>0);
+      const lines = (text||'').split(/\r?\n/).map(clean).filter(x=>x.length>0);
       if(!lines.length) return [];
       const header = clean(lines[0]);
       const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
-      const h = header.toLowerCase().replace(/\\s+/g,'');
+      const h = header.toLowerCase().replace(/\s+/g,'');
       const isHeader = h.includes('equipo') && h.includes('denomin') && h.includes('gmao');
       const startIdx = isHeader ? 1 : 0;
 
@@ -108,7 +109,7 @@ EJ-002,Otro ejemplo,456
         const row=[]; let cur='', quoted=false;
         for(let j=0;j<line.length;j++){
           const ch=line[j];
-          if(ch === '\"'){ if(quoted && line[j+1] === '\"'){ cur+='\"'; j++; } else { quoted=!quoted; } }
+          if(ch === '"'){ if(quoted && line[j+1] === '"'){ cur+='"'; j++; } else { quoted=!quoted; } }
           else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
           else { cur += ch; }
         }
@@ -155,6 +156,7 @@ EJ-002,Otro ejemplo,456
     }
 
     async function loadData(){
+      const msg = document.getElementById('msg');
       try{
         const res=await fetch('data.csv?cb='+Date.now(), {cache:'no-store'});
         if(!res.ok) throw 0;
@@ -163,11 +165,14 @@ EJ-002,Otro ejemplo,456
         if(!Array.isArray(DATA) || DATA.length===0){
           const fb=document.getElementById('embeddedCSV').textContent;
           const p=parseCSV(fb);
-          if(p.length>0) DATA=p;
+          if(p.length>0){ DATA=p; msg.textContent='Usando datos de respaldo (CSV vacío o con encabezado distinto).'; }
+        }else{
+          msg.textContent='Datos cargados desde data.csv';
         }
       }catch(e){
         const fb=document.getElementById('embeddedCSV').textContent;
         DATA=parseCSV(fb);
+        msg.textContent='No se pudo leer data.csv — usando respaldo.';
       }
       const urlQ=new URL(location.href).searchParams.get('q')||'';
       document.getElementById('q').value=urlQ;
