@@ -6,75 +6,87 @@
   <title>Listado filtrable — Equipo / Denominación</title>
   <meta name="description" content="Listado de dos columnas con buscador rápido, pensado para abrir desde código QR en el celular. Sin login, sin apps." />
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #0b0f14;
-      color: #e8f0f7;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 { font-size: 20px; margin-bottom: 10px; }
-    .searchbar {
-      margin-bottom: 20px;
-    }
-    input {
-      padding: 10px;
-      width: 100%;
-      border-radius: 8px;
-      border: none;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(255,255,255,.2);
-      text-align: left;
-    }
-    tr:hover {
-      background: rgba(255,255,255,.05);
-    }
-    .empty {
-      padding: 20px;
-      text-align: center;
-      color: #8fa3b7;
-    }
+    :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
+    html,body{height:100%}
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
+    .wrap{ max-width:900px; margin:24px auto; padding:0 16px 40px; }
+    header{ display:grid; gap:10px; margin-bottom:16px; }
+    h1{ font-size:20px; margin:0 0 10px; }
+    .searchbar{ display:grid; gap:8px; grid-template-columns:1fr auto auto; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; backdrop-filter:blur(6px); }
+    #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); outline:none; }
+    .btn{ padding:10px 12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:var(--text); border-radius:12px; cursor:pointer; }
+    .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
+    table{ width:100%; border-collapse:collapse; }
+    thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; z-index:2; }
+    tbody td{ padding:12px; border-top:1px solid rgba(255,255,255,.06); }
+    tbody tr:hover{ background:rgba(255,255,255,.02); }
+    .meta{ display:flex; gap:12px; align-items:center; color:var(--muted); font-size:12px; margin:6px 0 14px; }
+    .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
+    .empty{ text-align:center; padding:28px; color:var(--muted); }
+    .footer{ color:var(--muted); font-size:12px; margin-top:14px; text-align:center; }
+    @media (max-width:640px){ thead th{ top:88px; } .searchbar{ grid-template-columns:1fr; top:0; } .btn{ width:100%; } }
   </style>
 </head>
 <body>
-  <h1>Listado filtrable — Equipo / Denominación</h1>
-  <div class="searchbar">
-    <input id="q" type="search" placeholder="🔎 Buscar por equipo o denominación…" />
+  <div class="wrap">
+    <header>
+      <h1>Listado filtrable — <span style="color:#2dd4bf">Equipo</span> / <span style="color:#60a5fa">Denominación</span></h1>
+      <div class="meta">
+        <span id="count" class="pill">—</span>
+        <span>Busca por cualquier palabra en una o ambas columnas. Acentos y mayúsculas no afectan la búsqueda.</span>
+      </div>
+      <div class="searchbar">
+        <input id="q" type="search" placeholder="🔎 Buscar por equipo o denominación…" autocomplete="off" />
+        <button class="btn" id="clearBtn" title="Limpiar búsqueda">Limpiar</button>
+        <button class="btn" id="shareBtn" title="Copiar link para compartir">Compartir</button>
+      </div>
+    </header>
+
+    <div class="table-card">
+      <table>
+        <thead><tr><th style="width:36%">Equipo</th><th>Denominación</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
+    </div>
+
+    <div class="footer">
+      <p>Para actualizar la lista, sube un archivo <em>data.csv</em> junto a este HTML (2 columnas: <strong>Equipo,Denominación</strong>).</p>
+    </div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Equipo</th>
-        <th>Denominación</th>
-      </tr>
-    </thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
-
   <script>
-    const norm = s => (s||'').toString()
-      .normalize('NFD')
-      .replace(/[\\u0300-\\u036f]/g, '')
-      .toLowerCase();
+    const norm = s => (s||'').toString().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
 
+    // Parse CSV auto-detecting delimiter
     function parseCSV(text){
-      const lines = text.trim().split(/\\r?\\n/);
+      const lines = (text||'').trim().split(/\\r?\\n/);
+      if(!lines.length) return [];
+      const header = lines[0] || '';
+      const commas = (header.match(/,/g)||[]).length;
+      const semis  = (header.match(/;/g)||[]).length;
+      const DELIM = semis > commas ? ';' : ',';
       const out = [];
-      const startIdx = lines[0].toLowerCase().startsWith('equipo,') ? 1 : 0;
+      const startIdx = header.toLowerCase().startsWith('equipo'+DELIM) ? 1 : 0;
       for(let i=startIdx;i<lines.length;i++){
-        const [equipo, deno] = lines[i].split(',');
-        if(equipo || deno) out.push({equipo:equipo||'', deno:deno||''});
+        const row = [];
+        let cur = '', quoted = false;
+        for(let j=0;j<lines[i].length;j++){
+          const ch = lines[i][j];
+          if(ch === '\"'){
+            if(quoted && lines[i][j+1] === '\"'){ cur += '\"'; j++; }
+            else { quoted = !quoted; }
+          } else if(ch === DELIM && !quoted){
+            row.push(cur); cur = '';
+          } else { cur += ch; }
+        }
+        row.push(cur);
+        if(row.length >= 2){ out.push({ equipo: (row[0]||'').trim(), deno: (row[1]||'').trim() }); }
       }
       return out;
     }
+
+    let DATA = [];
 
     function render(list){
       const tbody = document.getElementById('rows');
@@ -85,31 +97,42 @@
         tbody.appendChild(tr);
       }
       document.getElementById('empty').hidden = list.length !== 0;
+      document.getElementById('count').textContent = `${list.length} resultado${list.length===1?'':'s'}`;
     }
 
     function applyFilter(){
       const q = document.getElementById('q').value;
       const nq = norm(q);
-      const filtered = !nq ? DATA : DATA.filter(r =>
-        norm(r.equipo).includes(nq) || norm(r.deno).includes(nq)
-      );
+      const filtered = !nq ? DATA : DATA.filter(r => norm(r.equipo).includes(nq) || norm(r.deno).includes(nq));
       render(filtered);
+      const url = new URL(location.href);
+      if(q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+      history.replaceState(null, '', url);
     }
 
-    document.getElementById('q').addEventListener('input', applyFilter);
-
-    let DATA = [];
     async function loadData(){
-      try {
-        const res = await fetch('data.csv');
+      try{
+        const res = await fetch('data.csv?cb=' + Date.now(), { cache:'no-store' });
+        if(!res.ok) throw 0;
         const txt = await res.text();
         DATA = parseCSV(txt);
-      } catch {
+      }catch(e){
         DATA = [];
       }
+      const urlQ = new URL(location.href).searchParams.get('q') || '';
+      const qEl = document.getElementById('q');
+      qEl.value = urlQ;
       applyFilter();
     }
+
+    document.getElementById('clearBtn').addEventListener('click', () => { document.getElementById('q').value=''; applyFilter(); document.getElementById('q').focus(); });
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      try{ await navigator.clipboard.writeText(location.href); const b=document.getElementById('shareBtn'); const t=b.textContent; b.textContent='¡Link copiado!'; setTimeout(()=>b.textContent=t,1200);}catch{ alert('Copia el link desde la barra del navegador.'); }
+    });
+    document.getElementById('q').addEventListener('input', () => { clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120); });
+
     loadData();
   </script>
 </body>
 </html>
+
