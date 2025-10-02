@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Listado de equipos Soldadura</title>
-  <!-- BUILD v7-dynamic-4cols -->
+  <!-- BUILD v9-4cols-fixed -->
   <style>
     :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:#e8f0f7; }
@@ -15,6 +15,7 @@
     .pill{ padding:4px 8px; border-radius:999px; background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); color:#bff3ea; }
     .searchbar{ display:grid; gap:8px; grid-template-columns:1fr; align-items:center; background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:8px; position:sticky; top:8px; z-index:5; }
     #q{ width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:#0d131a; color:#e8f0f7; }
+
     .table-card{ background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); overflow:hidden; }
     table{ width:100%; border-collapse:collapse; }
     thead th{ text-align:left; font-weight:600; color:var(--muted); padding:12px; background:#0d131a; position:sticky; top:64px; z-index:4; }
@@ -25,6 +26,8 @@
     .copy-btn:hover{ filter:brightness(1.12) }
     .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s ease }
     .toast.show{ opacity:1 }
+
+    /* Móvil: filas como tarjetas */
     @media (max-width: 720px){
       thead{ display:none; }
       table, tbody, tr, td{ display:block; width:100%; }
@@ -44,27 +47,40 @@
         <span id="msg"></span>
       </div>
       <div class="searchbar">
-        <input id="q" type="search" placeholder="🔎 Buscar por cualquier columna…" autocomplete="off" />
+        <input id="q" type="search" placeholder="🔎 Buscar por equipo, denominación, GMAO o ubicación…" autocomplete="off" />
       </div>
     </header>
 
     <div class="table-card">
       <table>
-        <thead><tr id="thead-row"></tr></thead>
+        <thead>
+          <tr>
+            <th style="width:18%">Equipo</th>
+            <th>Denominación</th>
+            <th style="width:18%">GMAO</th>
+            <th style="width:22%">Ubicación Tec</th>
+            <th style="width:120px">Copiar</th>
+          </tr>
+        </thead>
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
     </div>
   </div>
 
-  <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO,Extra
-EJ-001,Ejemplo equipo,123,Linea A
-EJ-002,Otro ejemplo,456,Linea B
+  <!-- Respaldo mínimo por si data.csv falla -->
+  <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO,Ubicación Tec
+EJ-001,Ejemplo equipo,123,Línea A
+EJ-002,Otro ejemplo,456,Línea B
 </script>
 
   <script>
-    const norm = s => (s ?? '').toString().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
-    const clean = s => (s||'').replace(/^\\uFEFF/, '').trim();
+    // Normaliza texto: acentos→simple, minúsculas, espacios compactados
+    const norm = s => (s ?? '').toString()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().replace(/\s+/g,' ').trim();
+
+    const clean = s => (s||'').replace(/^\uFEFF/, '').trim();
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -82,8 +98,9 @@ EJ-002,Otro ejemplo,456,Linea B
       }
     }
 
+    // CSV parser (detecta , o ; y respeta comillas)
     function parseCSV(text){
-      const lines = (text||'').split(/\\r?\\n/).map(clean).filter(x=>x.length>0);
+      const lines = (text||'').split(/\r?\n/).map(clean).filter(x=>x.length>0);
       if(!lines.length) return { header:[], rows:[] };
       const hdrRaw = lines[0];
       const commas=(hdrRaw.match(/,/g)||[]).length, semis=(hdrRaw.match(/;/g)||[]).length;
@@ -92,7 +109,7 @@ EJ-002,Otro ejemplo,456,Linea B
         const row=[]; let cur='', quoted=false;
         for(let j=0;j<line.length;j++){
           const ch=line[j];
-          if(ch === '\"'){ if(quoted && line[j+1] === '\"'){ cur+='\"'; j++; } else { quoted=!quoted; } }
+          if(ch === '"'){ if(quoted && line[j+1] === '"'){ cur+='"'; j++; } else { quoted=!quoted; } }
           else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
           else { cur += ch; }
         }
@@ -108,50 +125,50 @@ EJ-002,Otro ejemplo,456,Linea B
       return { header, rows };
     }
 
-    const findCol = (header, name) => {
-      const target = norm(name);
-      for(let i=0;i<header.length;i++){
-        if(norm(header[i]) === target) return i;
-      }
-      for(let i=0;i<header.length;i++){
-        if(norm(header[i]).startsWith(target)) return i;
+    // Busca índice de columna por nombre (con y sin acento)
+    function findCol(header, candidates){
+      const H = header.map(h => norm(h));
+      for(const cand of candidates){
+        const t = norm(cand);
+        let i = H.indexOf(t);
+        if(i !== -1) return i;
+        i = H.findIndex(x => x.startsWith(t));
+        if(i !== -1) return i;
       }
       return -1;
+    }
+
+    // Nombres fijos
+    const COLS = {
+      equipo: ['Equipo','Codigo','Código','Código Equipo','Codigo Equipo','ID','Asset'],
+      deno:   ['Denominación','Denominacion','Descripción','Descripcion','Nombre'],
+      gmao:   ['GMAO','SAP','CMMS','Código GMAO','Codigo GMAO'],
+      ubic:   ['Ubicación Tec','Ubicacion Tec','Ubicación','Ubicacion','Localización','Localizacion']
     };
 
-    let DATA=[], HEADER=[], IDX_EQUIPO=-1;
-
-    function buildHeader(){
-      const tr = document.getElementById('thead-row');
-      tr.innerHTML='';
-      HEADER.forEach((h)=>{
-        const th=document.createElement('th');
-        th.textContent = h;
-        tr.appendChild(th);
-      });
-      const thA=document.createElement('th'); thA.textContent='Copiar'; tr.appendChild(thA);
-    }
+    let DATA=[], idxEq=-1, idxDe=-1, idxGm=-1, idxUb=-1;
 
     function render(list){
       const tbody=document.getElementById('rows');
       tbody.innerHTML='';
-      list.forEach(arr=>{
+      for(const arr of list){
         const tr=document.createElement('tr');
-        HEADER.forEach((h,i)=>{
-          const td=document.createElement('td');
-          td.textContent = arr[i]||'';
-          td.setAttribute('data-label', h);
-          tr.appendChild(td);
-        });
+
+        const td1=document.createElement('td'); td1.textContent=arr[idxEq]||''; td1.setAttribute('data-label','Equipo');
+        const td2=document.createElement('td'); td2.textContent=arr[idxDe]||''; td2.setAttribute('data-label','Denominación');
+        const td3=document.createElement('td'); td3.textContent=arr[idxGm]||''; td3.setAttribute('data-label','GMAO');
+        const td4=document.createElement('td'); td4.textContent=arr[idxUb]||''; td4.setAttribute('data-label','Ubicación Tec');
+
         const tdA=document.createElement('td'); tdA.setAttribute('data-label','Acción');
         const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copiar equipo';
-        btn.addEventListener('click', ()=> copyText(IDX_EQUIPO>=0 ? (arr[IDX_EQUIPO]||'') : ''));
+        btn.addEventListener('click', ()=> copyText(arr[idxEq]||''));
         tdA.appendChild(btn);
-        tr.appendChild(tdA);
+
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(tdA);
         tbody.appendChild(tr);
-      });
+      }
       document.getElementById('empty').hidden = list.length !== 0;
-      document.getElementById('count').textContent=`${list.length} resultado${list.length===1?'':'s'}`;
+      document.getElementById('count').textContent = `${list.length} resultado${list.length===1?'':'s'}`;
     }
 
     function applyFilter(){
@@ -160,7 +177,7 @@ EJ-002,Otro ejemplo,456,Linea B
       if (!nq){ render(DATA); return; }
       const tokens = nq.split(' ');
       const filtered = DATA.filter(arr => {
-        const hay = norm(arr.join(' '));
+        const hay = norm([arr[idxEq],arr[idxDe],arr[idxGm],arr[idxUb]].join(' '));
         return tokens.every(t => hay.includes(t));
       });
       render(filtered);
@@ -173,28 +190,46 @@ EJ-002,Otro ejemplo,456,Linea B
         if(!res.ok) throw 0;
         const txt=await res.text();
         const parsed = parseCSV(txt);
-        HEADER = parsed.header;
-        DATA = parsed.rows;
-        if(!HEADER.length || !DATA.length){
-          const fb=document.getElementById('embeddedCSV').textContent;
-          const p=parseCSV(fb);
-          HEADER=p.header; DATA=p.rows;
-          msg.textContent='Usando datos de respaldo.';
-        }else{
-          msg.textContent='Datos cargados desde data.csv';
+        const H = parsed.header;
+        const rows = parsed.rows;
+
+        // mapear índices obligatorios
+        idxEq = findCol(H, COLS.equipo);
+        idxDe = findCol(H, COLS.deno);
+        idxGm = findCol(H, COLS.gmao);
+        idxUb = findCol(H, COLS.ubic);
+
+        if([idxEq,idxDe,idxGm,idxUb].some(i=>i<0)){
+          // Si falta alguna columna, usar respaldo embebido para no dejar la página en blanco
+          const fb = parseCSV(document.getElementById('embeddedCSV').textContent);
+          idxEq = findCol(fb.header, COLS.equipo);
+          idxDe = findCol(fb.header, COLS.deno);
+          idxGm = findCol(fb.header, COLS.gmao);
+          idxUb = findCol(fb.header, COLS.ubic);
+          DATA = fb.rows;
+          msg.textContent = 'Encabezados no coinciden exactamente; usando datos de respaldo.';
+        } else {
+          DATA = rows;
+          msg.textContent = 'Datos cargados desde data.csv';
         }
       }catch(e){
-        const fb=document.getElementById('embeddedCSV').textContent;
-        const p=parseCSV(fb);
-        HEADER=p.header; DATA=p.rows;
-        msg.textContent='No se pudo leer data.csv — usando respaldo.';
+        const fb = parseCSV(document.getElementById('embeddedCSV').textContent);
+        idxEq = findCol(fb.header, COLS.equipo);
+        idxDe = findCol(fb.header, COLS.deno);
+        idxGm = findCol(fb.header, COLS.gmao);
+        idxUb = findCol(fb.header, COLS.ubic);
+        DATA = fb.rows;
+        document.getElementById('msg').textContent = 'No se pudo leer data.csv — usando respaldo.';
       }
-      IDX_EQUIPO = findCol(HEADER, 'Equipo');
-      buildHeader();
+
+      // Inicializar búsqueda desde la URL (?q=)
+      const urlQ = new URL(location.href).searchParams.get('q') || '';
+      document.getElementById('q').value = urlQ;
       applyFilter();
     }
 
-    document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
+    // Eventos
+    document.getElementById('q').addEventListener('input',()=>{ clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120); });
     document.getElementById('q').addEventListener('blur',(e)=>{ e.target.value = norm(e.target.value); });
 
     loadData();
