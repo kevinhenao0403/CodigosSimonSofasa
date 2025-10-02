@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Listado de equipos Soldadura</title>
-  <!-- BUILD v6-mobile-GMAO -->
+  <!-- BUILD v7-dynamic-4cols -->
   <style>
     :root { --bg:#0b0f14; --card:#11161d; --muted:#8fa3b7; --text:#e8f0f7; --radius:16px; }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:var(--text); }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#0e141b 40%,#0b1118 100%); color:#e8f0f7; }
     .wrap{ max-width:1100px; margin:24px auto; padding:0 16px 40px; }
     header{ margin-bottom:16px; }
     h1{ font-size:20px; margin:0 0 10px; }
@@ -25,18 +25,12 @@
     .copy-btn:hover{ filter:brightness(1.12) }
     .toast{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#11161d; color:#e8f0f7; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); box-shadow:0 8px 20px rgba(0,0,0,.35); font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s ease }
     .toast.show{ opacity:1 }
-
-    /* ===== Vista móvil: filas como tarjetas ===== */
     @media (max-width: 720px){
       thead{ display:none; }
       table, tbody, tr, td{ display:block; width:100%; }
       tbody tr{ border-top:1px solid rgba(255,255,255,.06); padding:6px 12px; }
       tbody td{ border:0; padding:8px 0; }
-      tbody td::before{
-        content: attr(data-label);
-        display:block;
-        font-size:12px; color:var(--muted); margin-bottom:4px;
-      }
+      tbody td::before{ content: attr(data-label); display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
       td[data-label="Acción"] .copy-btn{ width:100%; }
     }
   </style>
@@ -50,35 +44,27 @@
         <span id="msg"></span>
       </div>
       <div class="searchbar">
-        <input id="q" type="search" placeholder="🔎 Buscar por equipo, denominación o GMAO…" autocomplete="off" />
+        <input id="q" type="search" placeholder="🔎 Buscar por cualquier columna…" autocomplete="off" />
       </div>
     </header>
 
     <div class="table-card">
       <table>
-        <thead><tr><th style="width:18%">Equipo</th><th>Denominación</th><th style="width:22%">GMAO</th><th style="width:120px">Copiar</th></tr></thead>
+        <thead><tr id="thead-row"></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty" hidden>No hay resultados para tu búsqueda.</div>
     </div>
   </div>
 
-  <!-- Respaldo mínimo: si el CSV falla nunca verás la tabla vacía -->
-  <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO
-EJ-001,Ejemplo equipo,123
-EJ-002,Otro ejemplo,456
+  <script id="embeddedCSV" type="text/csv">Equipo,Denominación,GMAO,Extra
+EJ-001,Ejemplo equipo,123,Linea A
+EJ-002,Otro ejemplo,456,Linea B
 </script>
 
   <script>
-    // Normaliza texto: quita acentos, minúsculas, compacta espacios y recorta
-    const norm = s => (s ?? '')
-      .toString()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const clean = s => (s||'').replace(/^\uFEFF/, '').trim(); // quita BOM
+    const norm = s => (s ?? '').toString().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+    const clean = s => (s||'').replace(/^\\uFEFF/, '').trim();
 
     function toast(msg){
       let t=document.getElementById('toast');
@@ -97,54 +83,73 @@ EJ-002,Otro ejemplo,456
     }
 
     function parseCSV(text){
-      const lines = (text||'').split(/\r?\n/).map(clean).filter(x=>x.length>0);
-      if(!lines.length) return [];
-      const header = clean(lines[0]);
-      const commas=(header.match(/,/g)||[]).length, semis=(header.match(/;/g)||[]).length;
+      const lines = (text||'').split(/\\r?\\n/).map(clean).filter(x=>x.length>0);
+      if(!lines.length) return { header:[], rows:[] };
+      const hdrRaw = lines[0];
+      const commas=(hdrRaw.match(/,/g)||[]).length, semis=(hdrRaw.match(/;/g)||[]).length;
       const DELIM = semis > commas ? ';' : ',';
-      const h = header.toLowerCase().replace(/\s+/g,'');
-      const isHeader = h.includes('equipo') && h.includes('denomin') && h.includes('gmao');
-      const startIdx = isHeader ? 1 : 0;
-
-      const out=[];
-      for(let i=startIdx;i<lines.length;i++){
-        const line=lines[i];
+      const parseLine = (line) => {
         const row=[]; let cur='', quoted=false;
         for(let j=0;j<line.length;j++){
           const ch=line[j];
-          if(ch === '"'){ if(quoted && line[j+1] === '"'){ cur+='"'; j++; } else { quoted=!quoted; } }
+          if(ch === '\"'){ if(quoted && line[j+1] === '\"'){ cur+='\"'; j++; } else { quoted=!quoted; } }
           else if(ch === DELIM && !quoted){ row.push(cur); cur=''; }
           else { cur += ch; }
         }
         row.push(cur);
-        if(row.length>=3){
-          const eq=(row[0]||'').trim(), de=(row[1]||'').trim(), gm=(row[2]||'').trim();
-          if(eq || de || gm) out.push({equipo:eq, deno:de, gmao:gm});
-        }
+        return row.map(s=>s.trim());
+      };
+      const header = parseLine(hdrRaw);
+      const rows = [];
+      for(let i=1;i<lines.length;i++){
+        const arr = parseLine(lines[i]);
+        if(arr.some(v=>v!=='')){ rows.push(arr); }
       }
-      return out;
+      return { header, rows };
     }
 
-    let DATA=[];
+    const findCol = (header, name) => {
+      const target = norm(name);
+      for(let i=0;i<header.length;i++){
+        if(norm(header[i]) === target) return i;
+      }
+      for(let i=0;i<header.length;i++){
+        if(norm(header[i]).startsWith(target)) return i;
+      }
+      return -1;
+    };
+
+    let DATA=[], HEADER=[], IDX_EQUIPO=-1;
+
+    function buildHeader(){
+      const tr = document.getElementById('thead-row');
+      tr.innerHTML='';
+      HEADER.forEach((h)=>{
+        const th=document.createElement('th');
+        th.textContent = h;
+        tr.appendChild(th);
+      });
+      const thA=document.createElement('th'); thA.textContent='Copiar'; tr.appendChild(thA);
+    }
 
     function render(list){
       const tbody=document.getElementById('rows');
       tbody.innerHTML='';
-      for(const r of list){
+      list.forEach(arr=>{
         const tr=document.createElement('tr');
-
-        const td1=document.createElement('td'); td1.textContent=r.equipo; td1.setAttribute('data-label','Equipo');
-        const td2=document.createElement('td'); td2.textContent=r.deno;   td2.setAttribute('data-label','Denominación');
-        const td3=document.createElement('td'); td3.textContent=r.gmao;   td3.setAttribute('data-label','GMAO');
-
-        const td4=document.createElement('td'); td4.setAttribute('data-label','Acción');
+        HEADER.forEach((h,i)=>{
+          const td=document.createElement('td');
+          td.textContent = arr[i]||'';
+          td.setAttribute('data-label', h);
+          tr.appendChild(td);
+        });
+        const tdA=document.createElement('td'); tdA.setAttribute('data-label','Acción');
         const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copiar equipo';
-        btn.addEventListener('click', ()=> copyText(r.equipo));
-        td4.appendChild(btn);
-
-        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+        btn.addEventListener('click', ()=> copyText(IDX_EQUIPO>=0 ? (arr[IDX_EQUIPO]||'') : ''));
+        tdA.appendChild(btn);
+        tr.appendChild(tdA);
         tbody.appendChild(tr);
-      }
+      });
       document.getElementById('empty').hidden = list.length !== 0;
       document.getElementById('count').textContent=`${list.length} resultado${list.length===1?'':'s'}`;
     }
@@ -153,10 +158,9 @@ EJ-002,Otro ejemplo,456
       const q = document.getElementById('q').value;
       const nq = norm(q);
       if (!nq){ render(DATA); return; }
-      // Busca por palabras (todas deben estar presentes en alguna columna)
       const tokens = nq.split(' ');
-      const filtered = DATA.filter(r => {
-        const hay = norm(`${r.equipo} ${r.deno} ${r.gmao||''}`);
+      const filtered = DATA.filter(arr => {
+        const hay = norm(arr.join(' '));
         return tokens.every(t => hay.includes(t));
       });
       render(filtered);
@@ -168,25 +172,28 @@ EJ-002,Otro ejemplo,456
         const res=await fetch('data.csv?cb='+Date.now(), {cache:'no-store'});
         if(!res.ok) throw 0;
         const txt=await res.text();
-        DATA=parseCSV(txt);
-        if(!Array.isArray(DATA) || DATA.length===0){
+        const parsed = parseCSV(txt);
+        HEADER = parsed.header;
+        DATA = parsed.rows;
+        if(!HEADER.length || !DATA.length){
           const fb=document.getElementById('embeddedCSV').textContent;
           const p=parseCSV(fb);
-          if(p.length>0){ DATA=p; msg.textContent='Usando datos de respaldo.'; }
+          HEADER=p.header; DATA=p.rows;
+          msg.textContent='Usando datos de respaldo.';
         }else{
           msg.textContent='Datos cargados desde data.csv';
         }
       }catch(e){
         const fb=document.getElementById('embeddedCSV').textContent;
-        DATA=parseCSV(fb);
+        const p=parseCSV(fb);
+        HEADER=p.header; DATA=p.rows;
         msg.textContent='No se pudo leer data.csv — usando respaldo.';
       }
-      const urlQ=new URL(location.href).searchParams.get('q')||'';
-      document.getElementById('q').value=urlQ;
+      IDX_EQUIPO = findCol(HEADER, 'Equipo');
+      buildHeader();
       applyFilter();
     }
 
-    // Eventos
     document.getElementById('q').addEventListener('input',()=>{clearTimeout(window._deb); window._deb=setTimeout(applyFilter,120);});
     document.getElementById('q').addEventListener('blur',(e)=>{ e.target.value = norm(e.target.value); });
 
